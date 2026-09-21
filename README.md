@@ -71,6 +71,22 @@ The specifications of the tasks have been left deliberately vague. You will be r
 There's no CI pipeline associated with this project, but in reality there would be. Consider the things that you would expect that pipeline to verify before allowing your code to be promoted
 Feel free to refactor the codebase if necessary. Bad choices were deliberately made when creating this project.
 
-Performance Investigation
+#Performance Investigation
 
 Investigated the slow GET endpoints by examining Hibernate SQL logs and PostgreSQL query execution plans. Identified opportunities to reduce database queries and improve data retrieval efficiency, and applied a Hibernate batch-fetching configuration change. Additional optimisation opportunities were also identified for consideration.
+
+
+## CI Pipeline and Docker Image
+
+A GitHub Actions workflow automatically runs the application tests, builds the Spring Boot JAR, and builds the Docker image.
+
+On pushes to the `main` branch, the workflow publishes the image to GitHub Container Registry (GHCR). Pull requests trigger validation without publishing the image.
+
+### Docker Image
+
+`ghcr.io/kailan1001101/securitease-assessment:latest`
+
+Pull the image:
+
+```bash
+docker pull ghcr.io/kailan1001101/securitease-assessment:latest
