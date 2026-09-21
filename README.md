@@ -1,19 +1,20 @@
 # Store Application
-The Store application keeps track of customers and orders in a database.
 
-# Assumptions
-This README assumes you're using a posix environment. It's possible to run this on Windows as well:
-* Instead of `./gradlew` use `gradlew.bat`
-* The syntax for creating the Docker container is different. You could also install PostgreSQL on bare metal if you prefer
+The Store application manages customers, orders and products using a PostgreSQL database.
 
+## Assumptions
 
-# Prerequisites
-This service assumes the presence of a postgresql 16.2 database server running on localhost:5433 (note the non-standard port)
-It assumes a username and password `admin:admin` can be used.
-It assumes there's already a database called `store`
+This README assumes you're using a POSIX environment. On Windows, use `gradlew.bat` instead of `./gradlew`.
 
-You can start the PostgreSQL instance like this:
-```shell
+The application expects PostgreSQL 16.2 to be running on `localhost:5433`, with the username and password `admin:admin` and a database named `store`.
+
+## Prerequisites
+
+You will need Java 17 and Docker to run the application using the instructions below.
+
+Start PostgreSQL using Docker:
+
+```bash
 docker run -d \
   --name postgres \
   --restart always \
@@ -26,67 +27,103 @@ docker run -d \
   postgres -c wal_level=logical
 ```
 
-# Running the application
-You should be able to run the service using
-```shell
+## Running the application
+
+To run the application locally:
+
+```bash
 ./gradlew bootRun
 ```
 
-The application uses Liquibase to migrate the schema. Some sample data is provided. You can create more data by reading the documentation in utils/README.md
+Liquibase handles database migrations when the application starts. Some sample data is included. More data can be generated using the instructions in `utils/README.md`.
 
-# Data model
-An order has an ID, a description, and is associated with the customer which made the order.
-A customer has an ID, a name, and 0 or more orders.
+## Running with Docker
 
-# API
-Two endpoints are provided:
-   * /order
-   * /customer
-
-Each of them supports a POST and a GET. The data model is circular - a customer owns a number of orders, and that order necessarily refers back to the customer which owns it.
-To avoid loops in the serializer, when writing out a Customer or an Order, they're mapped to CustomerDTO and OrderDTO which contain truncated versions of the dependent object - CustomerOrderDTO and OrderCustomerDTO respectively.
-
-The API is documented in the OpenAPI file OpenAPI.yaml. Note that this spec includes part of one of the tasks below (the new /products endpoint)
-
-# Tasks
-
-1. Extend the order endpoint to find a specific order, by ID
-2. Extend the customer endpoint to find customers based on a query string to match a substring of one of the words in their name
-3. Users have complained that in production the GET endpoints can get very slow. The database is unfortunately not co-located with the application server, and there's high latency between the two. Identify if there are any optimisations that can improve performance
-4. Add a new endpoint /products to model products which appear in an order:
-      * A single order contains 1 or more products.
-      * A product has an ID and a description.
-      * Add a POST endpoint to create a product
-      * Add a GET endpoint to return all products, and a specific product by ID
-        * In both cases, also return a list of the order IDs which contain those products
-      * Change the orders endpoint to return a list of products contained in the order
-
-# Bonus points
-1. Implement a CI pipeline on the platform of your choice to build the project and deliver it as a Dockerized image
-
-# Notes on the tasks
-Assume that the project represents a production application.
-Think carefully about the impact on performance when implementing your changes
-The specifications of the tasks have been left deliberately vague. You will be required to exercise judgement about what to deliver - in a real world environment, you would clarify these points in refinement, but since this is a project to be completed without interaction, feel free to make assumptions - but be prepared to defend them when asked.
-There's no CI pipeline associated with this project, but in reality there would be. Consider the things that you would expect that pipeline to verify before allowing your code to be promoted
-Feel free to refactor the codebase if necessary. Bad choices were deliberately made when creating this project.
-
-## Performance Investigation
-
-Investigated the slow GET endpoints by examining Hibernate SQL logs and PostgreSQL query execution plans. Identified opportunities to reduce database queries and improve data retrieval efficiency, and applied a Hibernate batch-fetching configuration change. Additional optimisation opportunities were also identified for consideration.
-
-
-## CI Pipeline and Docker Image
-
-A GitHub Actions workflow automatically runs the application tests, builds the Spring Boot JAR, and builds the Docker image.
-
-On pushes to the `main` branch, the workflow publishes the image to GitHub Container Registry (GHCR). Pull requests trigger validation without publishing the image.
-
-### Docker Image
-
-`ghcr.io/kailan1001101/securitease-assessment:latest`
-
-Pull the image:
+The application image is available from GitHub Container Registry.
 
 ```bash
 docker pull ghcr.io/kailan1001101/securitease-assessment:latest
+```
+
+If you're using the PostgreSQL container above, create a network and connect the database:
+
+```bash
+docker network create securitease-network
+docker network connect securitease-network postgres
+```
+
+Then start the application:
+
+```bash
+docker run --name securitease-app \
+  --network securitease-network \
+  -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://postgres:5432/store \
+  -e DB_USERNAME=admin \
+  -e DB_PASSWORD=admin \
+  ghcr.io/kailan1001101/securitease-assessment:latest
+```
+
+The application will be available at `http://localhost:8080`.
+
+The database runs separately from the application container.
+
+## Data model
+
+A customer has an ID and a name, and can have multiple orders.
+
+An order has an ID and description, belongs to a customer, and can contain multiple products.
+
+A product has an ID and description, and can be associated with multiple orders.
+
+## API
+
+### Customers
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/customer` | Get customers |
+| GET | `/customer?query=John` | Search customers by name |
+| POST | `/customer` | Create a customer |
+
+The search matches part of a customer's name and is case-insensitive.
+
+### Orders
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/order` | Get orders |
+| GET | `/order/{id}` | Get an order by ID |
+| POST | `/order` | Create an order |
+
+Order responses include the customer and products associated with the order.
+
+### Products
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/products` | Get all products |
+| GET | `/products/{id}` | Get a product by ID |
+| POST | `/products` | Create a product |
+
+Product responses include the IDs of the orders that contain the product.
+
+See `OpenAPI.yaml` for more details about the API.
+
+## Performance investigation
+
+I investigated the slow GET endpoints by looking at Hibernate SQL logs and PostgreSQL query execution plans.
+
+This helped identify opportunities to reduce database queries. I configured Hibernate batch fetching to reduce the number of database round trips.
+
+Further improvements could be considered based on the production workload, especially given the latency between the application and database servers.
+
+## CI pipeline and Docker image
+
+A GitHub Actions workflow runs the tests and builds the application and Docker image.
+
+When changes are pushed to `main`, the workflow also publishes the image to GitHub Container Registry. Pull requests run the validation steps without publishing an image.
+
+Docker image:
+
+`ghcr.io/kailan1001101/securitease-assessment:latest`
