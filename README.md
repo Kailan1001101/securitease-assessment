@@ -70,3 +70,7 @@ Think carefully about the impact on performance when implementing your changes
 The specifications of the tasks have been left deliberately vague. You will be required to exercise judgement about what to deliver - in a real world environment, you would clarify these points in refinement, but since this is a project to be completed without interaction, feel free to make assumptions - but be prepared to defend them when asked.
 There's no CI pipeline associated with this project, but in reality there would be. Consider the things that you would expect that pipeline to verify before allowing your code to be promoted
 Feel free to refactor the codebase if necessary. Bad choices were deliberately made when creating this project.
+
+Performance Investigation
+
+Investigated the slow GET endpoints by examining Hibernate SQL logs and PostgreSQL query execution plans. Identified opportunities to reduce database queries and improve data retrieval efficiency, and applied a Hibernate batch-fetching configuration change. Additional optimisation opportunities were also identified for consideration.
